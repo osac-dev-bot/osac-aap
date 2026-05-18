@@ -17,6 +17,7 @@
     name: kubevirt-hyperconverged
     namespace: openshift-cnv
   register: hyperconverged_cr_v1
+  ignore_errors: true
   when: gpu_devices | default([]) | length > 0
 
 - name: Read current HyperConverged CR (v1beta1 fallback)
@@ -29,21 +30,25 @@
   register: hyperconverged_cr_v1beta1
   when:
     - gpu_devices | default([]) | length > 0
-    - hyperconverged_cr_v1.resources | default([]) | length == 0
+    - hyperconverged_cr_v1 is failed or (hyperconverged_cr_v1.resources | default([]) | length == 0)
 
 - name: Select HyperConverged CR read result
   ansible.builtin.set_fact:
     hyperconverged_cr: >-
       {{ hyperconverged_cr_v1
-         if (hyperconverged_cr_v1.resources | default([]) | length > 0)
+         if not (hyperconverged_cr_v1 is failed)
+           and (hyperconverged_cr_v1.resources | default([]) | length > 0)
          else hyperconverged_cr_v1beta1 }}
     hyperconverged_api_version: >-
       {{ 'hco.kubevirt.io/v1'
-         if (hyperconverged_cr_v1.resources | default([]) | length > 0)
+         if not (hyperconverged_cr_v1 is failed)
+           and (hyperconverged_cr_v1.resources | default([]) | length > 0)
          else 'hco.kubevirt.io/v1beta1' }}
     hyperconverged_pci_devices_use_virtualization: >-
-      {{ (hyperconverged_cr_v1.resources | default([]) | length > 0)
-         or (hyperconverged_cr_v1beta1.resources[0].spec.virtualization is defined) }}
+      {{ (hyperconverged_cr_v1.resources[0].spec.virtualization is defined)
+         if not (hyperconverged_cr_v1 is failed)
+           and (hyperconverged_cr_v1.resources | default([]) | length > 0)
+         else (hyperconverged_cr_v1beta1.resources[0].spec.virtualization is defined) }}
   when: gpu_devices | default([]) | length > 0
 
 - name: Compute merged pciHostDevices preserving existing entries
@@ -64,10 +69,10 @@
          | list }}
   when: gpu_devices | default([]) | length > 0
 
-- name: Patch HyperConverged CR with merged pciHostDevices (v1)
+- name: Patch HyperConverged CR with merged pciHostDevices (virtualization path)
   kubernetes.core.k8s:
     kubeconfig: "{{ remote_cluster_kubeconfig | default(omit) }}"
-    api_version: hco.kubevirt.io/v1
+    api_version: "{{ hyperconverged_api_version }}"
     kind: HyperConverged
     name: kubevirt-hyperconverged
     namespace: openshift-cnv
@@ -81,10 +86,10 @@
     - gpu_devices | default([]) | length > 0
     - hyperconverged_pci_devices_use_virtualization | bool
 
-- name: Patch HyperConverged CR with merged pciHostDevices (v1beta1)
+- name: Patch HyperConverged CR with merged pciHostDevices (legacy path)
   kubernetes.core.k8s:
     kubeconfig: "{{ remote_cluster_kubeconfig | default(omit) }}"
-    api_version: hco.kubevirt.io/v1beta1
+    api_version: "{{ hyperconverged_api_version }}"
     kind: HyperConverged
     name: kubevirt-hyperconverged
     namespace: openshift-cnv
