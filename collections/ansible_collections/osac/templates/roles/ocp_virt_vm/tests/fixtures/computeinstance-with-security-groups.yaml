@@ -9,7 +9,10 @@ spec:
   networkAttachments:
     - subnetRef: test-subnet
       securityGroupRefs:
-        - web-sg
-        - db-sg
+        - securitygroup-web01
+        - securitygroup-db01
+    - subnetRef: monitoring-subnet
+      securityGroupRefs:
+        - securitygroup-mon01
 status:
   desiredConfigVersion: "1"

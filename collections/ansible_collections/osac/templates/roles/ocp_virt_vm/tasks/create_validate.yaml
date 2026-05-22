@@ -85,9 +85,9 @@
 
 - name: Build per-SG pod labels for VM
   ansible.builtin.set_fact:
-    vm_sg_labels: "{{ vm_sg_labels | combine({'osac.openshift.io/securitygroup-' ~ item: ''}) }}"
+    vm_sg_labels: "{{ vm_sg_labels | combine({'osac.openshift.io/' ~ item: ''}) }}"
   loop: "{{ vm_security_groups }}"
 
-- name: Override default VM labels to include per-SG labels
+- name: Merge security group labels into default VM labels
   ansible.builtin.set_fact:
     default_vm_labels: "{{ default_vm_labels | combine(vm_sg_labels) }}"

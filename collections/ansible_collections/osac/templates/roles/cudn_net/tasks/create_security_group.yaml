@@ -84,7 +84,7 @@
 
 - name: Build pod selector label for NetworkPolicy
   ansible.builtin.set_fact:
-    sg_pod_selector_labels: "{{ {'osac.openshift.io/securitygroup-' ~ sg_name: ''} }}"
+    sg_pod_selector_labels: "{{ {'osac.openshift.io/' ~ sg_name: ''} }}"
 
 - name: Create NetworkPolicy in target namespaces
   when: target_namespaces | default([]) | length > 0
