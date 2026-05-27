@@ -137,7 +137,9 @@ Every template role needs:
   `collections/ansible_collections/massopencloud/`, `execution-environment/`
 - **Ignore file**: `.ansible-lint-ignore` lists known acceptable violations
   (mostly `var-naming[no-role-prefix]` in playbooks and `risky-file-permissions`
-  in test overrides)
+  in test overrides). **Do not add new entries to `.ansible-lint-ignore`.**
+  Fix violations instead. If a violation cannot be fixed, flag it in the
+  PR description and let a human decide.
 
 ## yamllint Configuration
 
@@ -152,4 +154,6 @@ Changes in osac-aap often require coordinated changes in:
 - **fulfillment-service** -- proto/API field additions
 - **osac-installer** -- submodule bump (automated via CI)
 
-Document any cross-repo dependencies in the PR description.
+You operate on this repo only. If a fix requires changes in another repo,
+document the dependency in the PR description and stop. Do not attempt
+cross-repo changes.
