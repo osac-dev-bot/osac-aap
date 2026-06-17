@@ -1,0 +1,118 @@
+---
+- name: Fail if host class is not metal3
+  ansible.builtin.fail:
+    msg: "bm_host_metal3_provisioning requires hostClass 'metal3', got '{{ bare_metal_instance.spec.hostClass | default('') }}'"
+  when: bare_metal_instance.spec.hostClass | default('') != "metal3"
+
+- name: Parse template parameters
+  ansible.builtin.set_fact:
+    template_params: "{{ bare_metal_instance.spec.templateParameters | from_json }}"
+
+- name: Fail if image URL is missing
+  ansible.builtin.fail:
+    msg: "templateParameters.imageURL is required for Metal3 provisioning"
+  when: template_params.imageURL | default('') | length == 0
+
+- name: Parse externalHostID into namespace and name
+  ansible.builtin.set_fact:
+    bmh_namespace: "{{ bare_metal_instance.spec.externalHostID.split('/')[0] }}"
+    bmh_name: "{{ bare_metal_instance.spec.externalHostID.split('/')[1] }}"
+
+- name: Get BareMetalHost
+  kubernetes.core.k8s_info:
+    api_version: metal3.io/v1alpha1
+    kind: BareMetalHost
+    namespace: "{{ bmh_namespace }}"
+    name: "{{ bmh_name }}"
+  register: bmh_result
+
+- name: Fail if BareMetalHost not found
+  ansible.builtin.fail:
+    msg: "BareMetalHost '{{ bmh_namespace }}/{{ bmh_name }}' not found"
+  when: bmh_result.resources | length == 0
+
+- name: Extract BMH info
+  ansible.builtin.set_fact:
+    bmh_info: "{{ bmh_result.resources[0] }}"
+
+- name: Display current BMH state
+  ansible.builtin.debug:
+    msg:
+      - "BMH: {{ bmh_namespace }}/{{ bmh_name }}"
+      - "Provisioning State: {{ bmh_info.status.provisioning.state | default('unknown') }}"
+
+- name: Check if BMH is already provisioned with the correct image
+  ansible.builtin.set_fact:
+    already_provisioned: >-
+      {{ (bmh_info.status.provisioning.state | default('') == 'provisioned') and
+         (bmh_info.status.provisioning.image.url | default('') == template_params.imageURL) }}
+
+- name: Skip provisioning when BMH already has the desired image
+  when: already_provisioned | bool
+  ansible.builtin.debug:
+    msg: "BMH {{ bmh_namespace }}/{{ bmh_name }} is already provisioned with the desired image, skipping"
+
+- name: Provision BMH
+  when: not (already_provisioned | bool)
+  block:
+    - name: Create networkData Secret
+      when: template_params.networkData | default('') | length > 0
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: "{{ bmh_name }}-network-data"
+            namespace: "{{ bmh_namespace }}"
+          stringData:
+            networkData: "{{ template_params.networkData }}"
+
+    - name: Build BMH patch with networkData
+      when: template_params.networkData | default('') | length > 0
+      ansible.builtin.set_fact:
+        bmh_patch:
+          spec:
+            image:
+              url: "{{ template_params.imageURL }}"
+              checksum: "{{ template_params.imageChecksum | default('') }}"
+              checksumType: "{{ template_params.checksumType | default('auto') }}"
+            online: true
+            networkData:
+              name: "{{ bmh_name }}-network-data"
+              namespace: "{{ bmh_namespace }}"
+
+    - name: Build BMH patch without networkData
+      when: template_params.networkData | default('') | length == 0
+      ansible.builtin.set_fact:
+        bmh_patch:
+          spec:
+            image:
+              url: "{{ template_params.imageURL }}"
+              checksum: "{{ template_params.imageChecksum | default('') }}"
+              checksumType: "{{ template_params.checksumType | default('auto') }}"
+            online: true
+
+    - name: Patch BareMetalHost with image and provisioning settings
+      kubernetes.core.k8s:
+        api_version: metal3.io/v1alpha1
+        kind: BareMetalHost
+        namespace: "{{ bmh_namespace }}"
+        name: "{{ bmh_name }}"
+        state: present
+        definition: "{{ bmh_patch }}"
+
+    - name: Wait for BMH to reach provisioned state
+      kubernetes.core.k8s_info:
+        api_version: metal3.io/v1alpha1
+        kind: BareMetalHost
+        namespace: "{{ bmh_namespace }}"
+        name: "{{ bmh_name }}"
+      register: bmh_provision_status
+      until: bmh_provision_status.resources[0].status.provisioning.state | default('') == "provisioned"
+      retries: 120
+      delay: 30
+
+- name: Metal3 provisioning completed
+  ansible.builtin.debug:
+    msg: "Metal3 provisioning completed for BMH {{ bmh_namespace }}/{{ bmh_name }}"
