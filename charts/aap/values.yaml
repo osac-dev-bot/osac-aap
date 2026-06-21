@@ -5,7 +5,7 @@ aap:
     controller:
       disabled: false
     eda:
-      disabled: false
+      disabled: true
     hub:
       disabled: true
     lightspeed:
