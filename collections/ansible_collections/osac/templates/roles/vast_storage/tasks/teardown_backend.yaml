@@ -1,13 +1,15 @@
 ---
-# VAST teardown: live-query cleanup of all tenant resources.
-# K8s resources are deleted by label selector (catches JIT-created SCs).
-# VMS resources are queried live by tenant_id (no reliance on static tier list).
+# VAST teardown_backend: remove backend resources and hub Secret only.
+# Deletes VAST VMS resources (views, quotas, policies, tenant, manager,
+# local provider) and the per-tenant hub Secret.
+# Does NOT touch cluster-side K8s resources (StorageClasses, VolumeSnapshotClasses,
+# CSI Secret) — use cleanup action for those.
 
 - name: Fail if provisioning target is not yet supported
   when: _provisioning_target != 'vmaas'
   ansible.builtin.fail:
     msg: >-
-      VAST storage provisioning for target '{{ _provisioning_target }}' is not yet
+      VAST storage teardown_backend for target '{{ _provisioning_target }}' is not yet
       implemented. Only 'vmaas' is currently supported.
 
 - name: Validate tenant_name is a valid DNS label
@@ -33,7 +35,7 @@
     _vast_teardown_tenant_id: "{{ _vast_teardown_config.resources[0].data.vast_tenant_id | b64decode }}"
   no_log: true
 
-- name: Cleanup VAST resources
+- name: Cleanup VAST backend resources
   block:
     - name: Resolve VAST admin credentials for VMS API cleanup
       ansible.builtin.include_tasks: read_credentials.yaml
@@ -66,60 +68,6 @@
             - _vast_teardown_tenant_lookup.tenants.id is defined
           ansible.builtin.set_fact:
             _vast_teardown_tenant_id: "{{ _vast_teardown_tenant_lookup.tenants.id | string }}"
-
-    # ── K8s resources: delete by label selector ──
-
-    - name: Find all tenant StorageClasses by label
-      kubernetes.core.k8s_info:
-        api_version: storage.k8s.io/v1
-        kind: StorageClass
-        label_selectors:
-          - "osac.openshift.io/tenant={{ tenant_name }}"
-          - "app.kubernetes.io/managed-by=osac-aap"
-      register: _vast_teardown_sc_list
-
-    - name: Delete tenant StorageClasses
-      kubernetes.core.k8s:
-        state: absent
-        api_version: storage.k8s.io/v1
-        kind: StorageClass
-        name: "{{ item.metadata.name }}"
-      loop: "{{ _vast_teardown_sc_list.resources | default([]) }}"
-      loop_control:
-        label: "{{ item.metadata.name }}"
-      ignore_errors: true  # noqa: ignore-errors
-
-    - name: Find all tenant VolumeSnapshotClasses by label
-      kubernetes.core.k8s_info:
-        api_version: snapshot.storage.k8s.io/v1
-        kind: VolumeSnapshotClass
-        label_selectors:
-          - "osac.openshift.io/tenant={{ tenant_name }}"
-          - "app.kubernetes.io/managed-by=osac-aap"
-      register: _vast_teardown_vsc_list
-      ignore_errors: true  # noqa: ignore-errors
-
-    - name: Delete tenant VolumeSnapshotClasses
-      when: _vast_teardown_vsc_list.resources is defined
-      kubernetes.core.k8s:
-        state: absent
-        api_version: snapshot.storage.k8s.io/v1
-        kind: VolumeSnapshotClass
-        name: "{{ item.metadata.name }}"
-      loop: "{{ _vast_teardown_vsc_list.resources | default([]) }}"
-      loop_control:
-        label: "{{ item.metadata.name }}"
-      ignore_errors: true  # noqa: ignore-errors
-
-    - name: Delete CSI Secret in tenant namespace
-      kubernetes.core.k8s:
-        state: absent
-        api_version: v1
-        kind: Secret
-        name: "vast-csi-{{ tenant_name }}"
-        namespace: "{{ tenant_namespace }}"
-      ignore_errors: true  # noqa: ignore-errors
-      no_log: true
 
     # ── VMS resources: query live by tenant_id ──
 
@@ -241,7 +189,7 @@
       ansible.builtin.debug:
         msg: >-
           Tenant config Secret preserved because one or more resources failed to delete.
-          Re-run teardown to retry (idempotent).
+          Re-run teardown_backend to retry (idempotent).
 
   always:
     - name: Clear all credential facts from play scope
@@ -261,12 +209,11 @@
         _vast_teardown_tenant_id: ""
       no_log: true
 
-- name: Report teardown summary
+- name: Report backend teardown summary
   ansible.builtin.debug:
     msg: >-
-      Teardown for tenant '{{ tenant_name }}' complete.
-      K8s: {{ (_vast_teardown_sc_list.resources | default([]) | length) }} SCs,
-      {{ (_vast_teardown_vsc_list.resources | default([]) | length) }} VSCs deleted.
+      Backend teardown for tenant '{{ tenant_name }}' complete.
       VMS: {% for r, v in (_vast_cleanup_results | default({})).items() %}{{ v.queried }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} deleted.
       Tenant: {{ 'ok' if not (_vast_teardown_tenant_result.failed | default(false)) else 'failed' }},
       Manager: {{ 'ok' if not (_vast_manager_delete_failed | default(false)) else 'failed' }}.
+      Hub Secret: {{ 'deleted' if (_vast_teardown_clean | default(false) | bool) else 'preserved' }}.
