@@ -26,6 +26,10 @@ configAsCode:
   eeImage: ""
   projectGitUri: ""
   projectGitBranch: ""
+  importAgentsEnabled: false
+
+importAgents:
+  servers: []
 
 serviceAccounts:
   osacSa: "osac-sa"
