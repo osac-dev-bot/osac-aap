@@ -33,6 +33,11 @@
     name: "osac.templates.{{ _current_provider }}_storage"
     tasks_from: "{{ _dispatch_action }}"
     public: true
+  module_defaults:
+    kubernetes.core.k8s:
+      kubeconfig: "{{ _remote_kubeconfig | default(omit) }}"
+    kubernetes.core.k8s_info:
+      kubeconfig: "{{ _remote_kubeconfig | default(omit) }}"
   vars:
     _provider_tiers: "{{ _computed_provider_tiers }}"
     _provisioning_target: "{{ storage_provider_provisioning_target }}"
