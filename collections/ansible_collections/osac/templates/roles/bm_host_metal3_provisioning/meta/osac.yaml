@@ -1,7 +1,7 @@
 ---
-title: Default Bare Metal Instance Template
+title: Metal3 Bare Metal Instance Template
 description: >
-  General-purpose bare metal instance template. Provides a baseline hardware profile
-  for provisioning bare metal instances.
+  Provisions bare metal instances using Metal3 (Bare Metal Operator) with Redfish-based
+  host provisioning. Provides a baseline hardware profile for metal3-managed hosts.
 
 template_type: bare_metal_instance
