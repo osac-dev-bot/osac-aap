@@ -27,18 +27,20 @@
       None of the requested tiers ({{ _requested_tiers | join(', ') }}) match
       provider '{{ _current_provider }}' tiers. Check STORAGE_TIERS configuration.
 
-- name: "Dispatch provider storage action"
-  ansible.builtin.include_role:
-    name: "osac.templates.{{ _current_provider }}_storage"
-    tasks_from: "{{ _dispatch_action }}"
-    public: true
+- name: "Dispatch provider storage action with remote kubeconfig routing"
   module_defaults:
     kubernetes.core.k8s:
       kubeconfig: "{{ _remote_kubeconfig | default(omit) }}"
     kubernetes.core.k8s_info:
       kubeconfig: "{{ _remote_kubeconfig | default(omit) }}"
-  vars:
-    _provider_tiers: "{{ _computed_provider_tiers }}"
+  block:
+    - name: "Include provider storage role"
+      ansible.builtin.include_role:
+        name: "osac.templates.{{ _current_provider }}_storage"
+        tasks_from: "{{ _dispatch_action }}"
+        public: true
+      vars:
+        _provider_tiers: "{{ _computed_provider_tiers }}"
 
 - name: "Accumulate tenant config after dispatch (setup only)"
   ansible.builtin.set_fact:
