@@ -86,9 +86,9 @@
   ansible.builtin.set_fact:
     default_vm_labels: "{{ default_vm_labels | combine(vm_sg_labels) }}"
 
-- name: Extract primary subnet reference for CUDN NAD
+- name: Extract primary subnet reference
   ansible.builtin.set_fact:
-    vm_cudn_nad_name: >-
+    vm_subnet_ref: >-
       {{
         (
           compute_instance.spec.networkAttachments
@@ -102,8 +102,8 @@
 - name: Require networkAttachments with subnetRef
   ansible.builtin.assert:
     that:
-      - vm_cudn_nad_name | length > 0
+      - vm_subnet_ref | length > 0
     fail_msg: >-
       ComputeInstance must have spec.networkAttachments[0].subnetRef set.
-      This is required to determine the CUDN NetworkAttachmentDefinition
-      for VM networking. Ensure the ComputeInstance references a Subnet.
+      This identifies the subnet namespace where the VM will be created.
+      Ensure the ComputeInstance references a Subnet.

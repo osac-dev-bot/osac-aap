@@ -32,8 +32,8 @@
 #   Test 9 (Windows sysprep with valid password accepted):
 #     ansible-playbook ... -e test_windows_sysprep_valid=true
 #
-#   Test 10 (CUDN NAD name extracted from networkAttachments):
-#     ansible-playbook ... -e test_create_cudn_nad_extracted=true
+#   Test 10 (Subnet reference extracted from networkAttachments):
+#     ansible-playbook ... -e test_create_subnet_ref_extracted=true
 #
 #   Test 11 (Missing networkAttachments rejected):
 #     ansible-playbook ... -e test_create_missing_subnet_fails=true
@@ -513,10 +513,10 @@
             fail_msg: "Expected vm_hostname='test-win-with-i' (truncated), got {{ vm_hostname | default('undefined') }}"
 
 # ──────────────────────────────────────────────────────────────
-# Test 10: CUDN NAD name extracted from networkAttachments
-# Expected: vm_cudn_nad_name == subnetRef from fixture
+# Test 10: Subnet reference extracted from networkAttachments
+# Expected: vm_subnet_ref == subnetRef from fixture
 # ──────────────────────────────────────────────────────────────
-- name: "Test ocp_virt_vm -- CUDN NAD name extracted from networkAttachments"
+- name: "Test ocp_virt_vm -- subnet reference extracted from networkAttachments"
   hosts: localhost
 
   collections:
@@ -526,7 +526,7 @@
     compute_instance_label: "osac.openshift.io/computeinstance"
 
   tasks:
-    - when: test_create_cudn_nad_extracted | default(false) | bool
+    - when: test_create_subnet_ref_extracted | default(false) | bool
       block:
         - name: Read ComputeInstance fixture with networkAttachments
           ansible.builtin.set_fact:
@@ -536,17 +536,17 @@
           ansible.builtin.set_fact:
             compute_instance_name: "{{ compute_instance.metadata.name }}"
 
-        - name: Run create_validate to extract NAD name
+        - name: Run create_validate to extract subnet reference
           ansible.builtin.include_role:
             name: osac.templates.ocp_virt_vm
             tasks_from: create_validate.yaml
 
-        - name: Verify vm_cudn_nad_name matches first subnetRef
+        - name: Verify vm_subnet_ref matches first subnetRef
           ansible.builtin.assert:
             that:
-              - vm_cudn_nad_name is defined
-              - vm_cudn_nad_name == "test-subnet"
-            fail_msg: "Expected vm_cudn_nad_name='test-subnet', got {{ vm_cudn_nad_name | default('undefined') }}"
+              - vm_subnet_ref is defined
+              - vm_subnet_ref == "test-subnet"
+            fail_msg: "Expected vm_subnet_ref='test-subnet', got {{ vm_subnet_ref | default('undefined') }}"
 
 # ──────────────────────────────────────────────────────────────
 # Test 11: Missing networkAttachments must fail validation
