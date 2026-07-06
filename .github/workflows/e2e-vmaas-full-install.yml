@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   e2e-vmaas-full-install:
-    uses: osac-project/osac-test-infra/.github/workflows/e2e-vmaas-full-install.yml@main
+    uses: osac-project/osac-test-infra/.github/workflows/e2e-vmaas-full-install.yml@fix/aap-project-scm-override
     with:
       test-suite: ${{ inputs.test-suite || 'vmaas' }}
       test-filter: ${{ inputs.test-filter || '' }}
