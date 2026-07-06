@@ -1,0 +1,33 @@
+---
+# ExternalIPPool deletion — removes IPAM subnets registered for the pool
+
+- name: Extract ExternalIPPool configuration
+  ansible.builtin.set_fact:
+    pool_name: "{{ external_ip_pool.metadata.name }}"
+    pool_cidrs: "{{ external_ip_pool.spec.cidrs }}"
+
+- name: Display ExternalIPPool deletion info
+  ansible.builtin.debug:
+    msg:
+      - "Deleting Netris IPAM subnets for ExternalIPPool '{{ pool_name }}'"
+      - "CIDRs: {{ pool_cidrs }}"
+
+- name: Ensure Netris auth
+  ansible.builtin.include_role:
+    name: netris.controller.auth
+  when: netris_session_cookie is not defined
+
+- name: Delete IPAM subnet for each CIDR
+  ansible.builtin.include_role:
+    name: netris.controller.ipam
+    tasks_from: delete_subnet
+  vars:
+    ipam_name: "{{ (pool_cidrs | length == 1) | ternary(pool_name, pool_name + '-' + (idx | string)) }}"
+  loop: "{{ pool_cidrs }}"
+  loop_control:
+    index_var: idx
+    label: "{{ item }}"
+
+- name: Display ExternalIPPool deletion result
+  ansible.builtin.debug:
+    msg: "ExternalIPPool '{{ pool_name }}' — {{ pool_cidrs | length }} IPAM subnet(s) removed"
