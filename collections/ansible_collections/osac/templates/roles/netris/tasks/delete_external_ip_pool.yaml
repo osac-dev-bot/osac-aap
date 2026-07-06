@@ -1,5 +1,6 @@
 ---
-# ExternalIPPool deletion — removes IPAM subnets and allocations for the pool
+# ExternalIPPool deletion — removes IPAM allocations for the pool
+# Child /32 subnets (ExternalIPs) must be deleted before the allocation
 
 - name: Extract ExternalIPPool configuration
   ansible.builtin.set_fact:
@@ -9,24 +10,13 @@
 - name: Display ExternalIPPool deletion info
   ansible.builtin.debug:
     msg:
-      - "Deleting Netris IPAM entries for ExternalIPPool '{{ pool_name }}'"
+      - "Deleting Netris IPAM allocations for ExternalIPPool '{{ pool_name }}'"
       - "CIDRs: {{ pool_cidrs }}"
 
 - name: Ensure Netris auth
   ansible.builtin.include_role:
     name: netris.controller.auth
   when: netris_session_cookie is not defined
-
-- name: Delete IPAM subnet for each CIDR
-  ansible.builtin.include_role:
-    name: netris.controller.ipam
-    tasks_from: delete_subnet
-  vars:
-    ipam_name: "{{ (pool_cidrs | length == 1) | ternary(pool_name, pool_name + '-' + (idx | string)) }}"
-  loop: "{{ pool_cidrs }}"
-  loop_control:
-    index_var: idx
-    label: "{{ item }}"
 
 - name: Delete IPAM allocation for each CIDR
   ansible.builtin.include_role:
@@ -41,4 +31,4 @@
 
 - name: Display ExternalIPPool deletion result
   ansible.builtin.debug:
-    msg: "ExternalIPPool '{{ pool_name }}' — {{ pool_cidrs | length }} IPAM subnet(s) + allocation(s) removed"
+    msg: "ExternalIPPool '{{ pool_name }}' — {{ pool_cidrs | length }} IPAM allocation(s) removed"
