@@ -267,6 +267,8 @@ controller_templates: # noqa: var-naming[no-role-prefix]
     allow_simultaneous: true
     ask_variables_on_launch: true
     verbosity: 0
+  # IPAM allocate-from-pool is non-atomic: concurrent creates could pick
+  # the same IP. Serialized to prevent duplicate allocation.
   - name: "{{ aap_prefix }}-create-external-ip"
     project: "{{ aap_prefix }}"
     organization: "{{ aap_organization_name }}"

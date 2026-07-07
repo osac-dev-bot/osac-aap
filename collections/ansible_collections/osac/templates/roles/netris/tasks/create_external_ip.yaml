@@ -89,9 +89,9 @@
         msg: >-
           ExternalIPPool allocations for '{{ eip_pool_name }}' not found in Netris IPAM.
           Ensure the ExternalIPPool has been created before allocating ExternalIPs.
-      when: _eip_pool_allocs | length == 0
+      when: (_eip_pool_allocs | default([])) | length == 0
 
-    - name: Collect allocated /32 addresses within pool CIDRs
+    - name: Collect all allocated /32 addresses from IPAM
       ansible.builtin.set_fact:
         _eip_allocated_addrs: >-
           {{ (_eip_ipam_subnets_resp.json.data | default([]))
@@ -101,6 +101,8 @@
              | map('ansible.utils.ipaddr', 'address')
              | list }}
 
+    # Pool allocations are assumed /30 or wider — /31 (RFC 3021) would
+    # produce an empty candidate range and is not supported.
     - name: Find first available IP in pool
       ansible.builtin.set_fact:
         eip_allocated_address: >-
@@ -147,7 +149,9 @@
     - name: Display IPAM subnet result
       ansible.builtin.debug:
         msg: >-
-          IPAM subnet '{{ eip_name }}' created for {{ eip_allocated_address }}/32
+          IPAM subnet '{{ eip_name }}'
+          {{ (ipam_already_existed | default(false)) | ternary('already exists', 'created successfully') }}
+          for {{ eip_allocated_address }}/32
           (ID: {{ ipam_subnet_id | default('unknown') }})
 
 - name: Write allocated address to ExternalIP CR annotation
