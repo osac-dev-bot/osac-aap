@@ -100,6 +100,31 @@
        | selectattr('status', 'equalto', 'True')
        | list | length == 0)
 
+# --- Hardware Profiles ---
+
+- name: Apply hardware profiles
+  kubernetes.core.k8s:
+    kubeconfig: "{{ admin_kubeconfig }}"
+    state: present
+    definition: "{{ item }}"
+  loop: >-
+    {{ lookup('ansible.builtin.template', 'hardware-profiles.yaml.j2')
+       | from_yaml_all | list }}
+  loop_control:
+    label: "HardwareProfile/{{ item.metadata.name }}"
+  register: _r
+  retries: 5
+  delay: 10
+  until: _r is not failed
+  when: ocp_4_20_ai_maas_hardware_profiles | length > 0
+
+- name: Report hardware profiles
+  ansible.builtin.debug:
+    msg: >-
+      Hardware profiles created:
+      {{ ocp_4_20_ai_maas_hardware_profiles | map(attribute='name') | list }}
+  when: ocp_4_20_ai_maas_hardware_profiles | length > 0
+
 # --- Dashboard feature flags (non-MaaS) ---
 
 - name: Patch OdhDashboardConfig with observability flag

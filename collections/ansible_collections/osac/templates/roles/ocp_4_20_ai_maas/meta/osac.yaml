@@ -9,7 +9,7 @@ description: >
 template_type: cluster
 implementation_strategy: ocp_4_20_ai_maas
 default_node_request:
-  - resourceClass: dgx
+  - resourceClass: g5
     numberOfNodes: 2
 allowed_resource_classes: []
 parameters:
@@ -61,3 +61,18 @@ parameters:
     type: boolean
     required: false
     default: true
+  - name: hardware_profiles
+    title: Hardware Profiles
+    description: >
+      List of HardwareProfile CRs to create. Each entry defines a GPU/accelerator
+      profile with CPU, memory, and optional accelerator constraints.
+    type: list
+    required: false
+  - name: external_models
+    title: External Models
+    description: >
+      List of external models to access from upstream clusters. Each entry creates
+      an ExternalModel CR with MaaS governance. When secured=true, a maas-proxy
+      is deployed. Requires enable_maas=true.
+    type: list
+    required: false

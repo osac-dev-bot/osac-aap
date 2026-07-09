@@ -15,6 +15,8 @@
     ocp_4_20_ai_maas_oidc_client_id: "{{ template_parameters.oidc_client_id | default('') }}"
     ocp_4_20_ai_maas_enable_observability: "{{ template_parameters.enable_observability | default(true) | bool }}"
     ocp_4_20_ai_maas_enable_dashboard: "{{ template_parameters.enable_dashboard | default(true) | bool }}"
+    ocp_4_20_ai_maas_hardware_profiles: "{{ template_parameters.hardware_profiles | default(ocp_4_20_ai_maas_hardware_profiles) }}"
+    ocp_4_20_ai_maas_external_models: "{{ template_parameters.external_models | default(ocp_4_20_ai_maas_external_models) }}"
   when: template_parameters is defined
 
 - name: Create cluster with RHOAI + MaaS post-install

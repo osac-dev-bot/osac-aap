@@ -3,7 +3,7 @@
 # Runs the role's task files directly against a live cluster.
 #
 # Usage:
-#   ansible-playbook playbook_osac_create_maas_deployment.yml --tags all -v
+#   ansible-playbook playbook_osac_create_maas_deployment.yml --tags full -v
 #   ansible-playbook playbook_osac_create_maas_deployment.yml --tags operators
 #   ansible-playbook playbook_osac_create_maas_deployment.yml --tags maas
 #   ansible-playbook playbook_osac_create_maas_deployment.yml --tags verify
@@ -23,6 +23,37 @@
       ansible.builtin.set_fact:
         ocp_4_20_ai_maas_enable_keycloak: false
       when: not (ocp_4_20_ai_maas_enable_maas | default(true) | bool)
+      tags: [always]
+
+    - name: Clean up leftover external subscriptions from prior runs
+      kubernetes.core.k8s:
+        kubeconfig: "{{ admin_kubeconfig }}"
+        state: absent
+        api_version: maas.opendatahub.io/v1alpha1
+        kind: MaaSSubscription
+        name: "{{ item.name }}-sub"
+        namespace: models-as-a-service
+      loop: "{{ ocp_4_20_ai_maas_external_models | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}-sub"
+      failed_when: false
+      when: ocp_4_20_ai_maas_external_models | default([]) | length > 0
+      tags: [always]
+
+    - name: Clean up leftover external auth policies from prior runs
+      kubernetes.core.k8s:
+        kubeconfig: "{{ admin_kubeconfig }}"
+        state: absent
+        api_version: maas.opendatahub.io/v1alpha1
+        kind: MaaSAuthPolicy
+        name: "{{ item.name }}-access"
+        namespace: models-as-a-service
+      loop: "{{ ocp_4_20_ai_maas_external_models | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}-access"
+      failed_when: false
+      when: ocp_4_20_ai_maas_external_models | default([]) | length > 0
+      tags: [always]
 
   tasks:
     # --- Install Operators (BOM Phase 2 + 3) ---
@@ -33,10 +64,10 @@
         apply:
           tags:
             - operators
-            - all
+            - full
       tags:
         - operators
-        - all
+        - full
 
     # --- Configure cluster (gateway, observability) ---
     - name: Configure cluster
@@ -47,11 +78,11 @@
           tags:
             - cluster
             - maas
-            - all
+            - full
       tags:
         - cluster
         - maas
-        - all
+        - full
 
     # --- Configure MaaS (Phases 1-5) ---
     - name: Configure MaaS platform
@@ -61,10 +92,10 @@
         apply:
           tags:
             - maas
-            - all
+            - full
       tags:
         - maas
-        - all
+        - full
       when: ocp_4_20_ai_maas_enable_maas | default(true) | bool
 
     # --- Verification ---
@@ -75,10 +106,26 @@
         apply:
           tags:
             - verify
-            - all
+            - full
       tags:
         - verify
-        - all
+        - full
+
+    # --- Configure External Models (Phase 6 — after verify) ---
+    - name: Configure external models
+      ansible.builtin.include_role:
+        name: osac.templates.ocp_4_20_ai_maas
+        tasks_from: configure_external_models.yaml
+        apply:
+          tags:
+            - external
+            - full
+      tags:
+        - external
+        - full
+      when:
+        - ocp_4_20_ai_maas_enable_maas | default(true) | bool
+        - ocp_4_20_ai_maas_external_models | default([]) | length > 0
 
     # --- Cleanup ---
     - name: Undeploy everything
