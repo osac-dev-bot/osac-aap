@@ -7,7 +7,6 @@
   ansible.builtin.set_fact:
     na_host_name: "{{ network_attachment.host_name }}"
     na_logical_interface: "{{ network_attachment.logical_interface_name }}"
-    na_mac_address: "{{ network_attachment.mac_address }}"
     na_subnet_ref: "{{ network_attachment.subnet_ref }}"
     na_primary: "{{ network_attachment.primary | default(false) }}"
 
@@ -34,7 +33,7 @@
   ansible.builtin.debug:
     msg:
       - "Creating Netris network attachment for host '{{ na_host_name }}'"
-      - "Logical interface: {{ na_logical_interface }} (MAC: {{ na_mac_address }})"
+      - "Logical interface: {{ na_logical_interface }}"
       - "Subnet: {{ na_subnet_name }} (UUID: {{ na_subnet_ref }})"
       - "Primary: {{ na_primary }}"
 
@@ -302,108 +301,11 @@
       on subnet '{{ na_subnet_name }}'
       (reservation ID: {{ _reservation_resp.json.data.id | default('unknown') }})
 
-# --- Phase B + C: NMState config render and SSH apply ---
-
-- name: Get server management IP from Netris inventory
-  ansible.builtin.set_fact:
-    _server_mgmt_ip: "{{ _target_server.mgmtAddress | default('') }}"
-
-- name: Fail if server has no management IP
-  ansible.builtin.fail:
-    msg: >-
-      Server '{{ na_host_name }}' has no management IP address in Netris inventory.
-      Cannot apply NMState configuration without SSH access.
-  when: _server_mgmt_ip | length == 0
-
-- name: Resolve OS interface name from MAC address
-  ansible.builtin.shell:
-    cmd: |
-      ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 \
-        -o 'ProxyCommand=ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 -i {{ server_ssh_bastion_key }} -W %h:%p {{ server_ssh_bastion_user }}@{{ server_ssh_bastion_host }}' \
-        -i {{ server_ssh_key }} \
-        {{ server_ssh_user | default('core') }}@{{ _server_mgmt_ip }} \
-        'ip -j link show | python3 -c "import sys,json; devs=json.load(sys.stdin); matches=[d[\"ifname\"] for d in devs if d.get(\"address\",\"\").lower()==\"{{ na_mac_address | lower }}\".lower()]; print(matches[0] if matches else \"\")"'
-  register: _os_interface_result
-  changed_when: false
-  no_log: true
-
-- name: Set OS interface name
-  ansible.builtin.set_fact:
-    _os_interface_name: "{{ _os_interface_result.stdout | trim }}"
-
-- name: Fail if OS interface not found for MAC
-  ansible.builtin.fail:
-    msg: >-
-      No OS interface found with MAC address '{{ na_mac_address }}' on host '{{ na_host_name }}'.
-      Verify the MAC address matches a physical NIC on the server.
-  when: _os_interface_name | length == 0
-
-- name: Display resolved OS interface
-  ansible.builtin.debug:
-    msg: >-
-      Resolved MAC '{{ na_mac_address }}' to OS interface '{{ _os_interface_name }}'
-      on host '{{ na_host_name }}'
-
-- name: Render NMState config for BM host
-  ansible.builtin.set_fact:
-    _nmstate_rendered_config: "{{ lookup('ansible.builtin.template', 'bm_network_attachment.yaml.j2') }}"
-  vars:
-    nmstate_interface: "{{ _os_interface_name }}"
-    nmstate_ip: "{{ _allocated_ip }}"
-    nmstate_prefix: "{{ _vnet_prefix }}"
-    nmstate_gateway: "{{ _vnet_gateway_ip }}"
-    nmstate_primary: "{{ na_primary | bool }}"
-    nmstate_mgmt_interface: "{{ na_mgmt_interface | default(server_mgmt_interface | default('')) }}"
-    nmstate_mgmt_route_destination: "{{ server_mgmt_route_destination }}"
-    nmstate_mgmt_route_gateway: "{{ server_mgmt_route_gateway }}"
-
-- name: Write NMState config to temp file
-  ansible.builtin.copy:
-    content: "{{ _nmstate_rendered_config }}"
-    dest: "/tmp/nmstate-{{ na_host_name }}-{{ na_logical_interface }}.yaml"
-    mode: "0644"
-
-- name: Disable rp_filter on BM host
-  ansible.builtin.shell:
-    cmd: |
-      ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 \
-        -o 'ProxyCommand=ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 -i {{ server_ssh_bastion_key }} -W %h:%p {{ server_ssh_bastion_user }}@{{ server_ssh_bastion_host }}' \
-        -i {{ server_ssh_key }} \
-        {{ server_ssh_user | default('core') }}@{{ _server_mgmt_ip }} \
-        'sudo sysctl -qw net.ipv4.conf.all.rp_filter=0'
-  changed_when: false
-  no_log: true
-
-- name: Copy NMState config to BM host
-  ansible.builtin.shell:
-    cmd: |
-      scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 \
-        -o 'ProxyCommand=ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 -i {{ server_ssh_bastion_key }} -W %h:%p {{ server_ssh_bastion_user }}@{{ server_ssh_bastion_host }}' \
-        -i {{ server_ssh_key }} \
-        /tmp/nmstate-{{ na_host_name }}-{{ na_logical_interface }}.yaml \
-        {{ server_ssh_user | default('core') }}@{{ _server_mgmt_ip }}:/tmp/nmstate-config.yaml
-  changed_when: true
-  no_log: true
-
-- name: Apply NMState config on BM host
-  ansible.builtin.shell:
-    cmd: |
-      ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 \
-        -o 'ProxyCommand=ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 -i {{ server_ssh_bastion_key }} -W %h:%p {{ server_ssh_bastion_user }}@{{ server_ssh_bastion_host }}' \
-        -i {{ server_ssh_key }} \
-        {{ server_ssh_user | default('core') }}@{{ _server_mgmt_ip }} \
-        'nohup sudo nmstatectl apply /tmp/nmstate-config.yaml > /tmp/nmstate-apply.log 2>&1 &'
-  changed_when: true
-  no_log: true
-
-- name: Clean up local temp file
-  ansible.builtin.file:
-    path: "/tmp/nmstate-{{ na_host_name }}-{{ na_logical_interface }}.yaml"
-    state: absent
-
-- name: Display NMState apply result
-  ansible.builtin.debug:
-    msg: >-
-      NMState config applied on host '{{ na_host_name }}' —
-      interface '{{ na_logical_interface }}' configured with IP '{{ _allocated_ip }}/{{ _vnet_prefix }}'
-      {{ (na_primary | bool) | ternary('(primary — default gateway via ' + _vnet_gateway_ip + ')', '(secondary — no default gateway)') }}
+# NOTE: Host-side network configuration (static IP, default gateway, routes)
+# is NOT performed by the fabric manager role. It is the responsibility of the
+# BMaaS/CaaS provisioning template to configure the OS networking using the
+# allocated IP from network_attachment_ip and the primary flag. The fabric
+# manager only handles switch-side config (V-Net port attachment) and IPAM
+# allocation. The provisioning template can use the mac_address to resolve
+# the OS interface name and apply networking via cloud-init, kickstart,
+# ignition, NMState, or whatever the target OS supports.
