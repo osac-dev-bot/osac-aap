@@ -98,7 +98,7 @@
 
 - name: Get server ports
   ansible.builtin.uri:
-    url: "{{ netris_controller_url }}/api/v2/hw/ports?type=used&switchID={{ _target_server.id }}"
+    url: "{{ netris_controller_url }}/api/v2/hw/ports?switchID={{ _target_server.id }}"
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
@@ -109,25 +109,24 @@
   register: _ports_resp
   no_log: true
 
+- name: Extract ports list from response
+  ansible.builtin.set_fact:
+    _server_ports: >-
+      {{ (_ports_resp.json.data.data | default(_ports_resp.json.data))
+         | default([]) }}
+
 - name: Find port matching interface name
   ansible.builtin.set_fact:
     _target_port: >-
-      {{ (_ports_resp.json.data | default([]))
-         | selectattr('ifName', 'equalto', na_logical_interface)
-         | list | first
-         | default(
-             (_ports_resp.json.data | default([]))
-             | selectattr('port', 'equalto', na_logical_interface)
-             | list | first | default(none)
-           ) }}
+      {{ _server_ports
+         | selectattr('port', 'equalto', na_logical_interface)
+         | list | first | default(none) }}
 
 - name: Fail if port not found
   ansible.builtin.fail:
     msg: >-
       Port '{{ na_logical_interface }}' not found on server '{{ na_host_name }}'.
-      Available ports: {{ (_ports_resp.json.data | default([]))
-                          | map(attribute='ifName')
-                          | list }}.
+      Available ports: {{ _server_ports | map(attribute='port') | list }}.
   when: _target_port is none
 
 - name: Check if port is already on V-Net

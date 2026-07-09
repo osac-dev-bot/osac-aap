@@ -98,7 +98,7 @@
 
 - name: Get server ports
   ansible.builtin.uri:
-    url: "{{ netris_controller_url }}/api/v2/hw/ports?type=used&switchID={{ _target_server.id }}"
+    url: "{{ netris_controller_url }}/api/v2/hw/ports?switchID={{ _target_server.id }}"
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
@@ -112,17 +112,21 @@
     - _target_server is defined and _target_server is not none
   no_log: true
 
+- name: Extract ports list from response
+  ansible.builtin.set_fact:
+    _server_ports: >-
+      {{ (_ports_resp.json.data.data | default(_ports_resp.json.data))
+         | default([]) }}
+  when:
+    - _target_vnet is defined and _target_vnet is not none
+    - _target_server is defined and _target_server is not none
+
 - name: Find port matching interface name
   ansible.builtin.set_fact:
     _target_port: >-
-      {{ (_ports_resp.json.data | default([]))
-         | selectattr('ifName', 'equalto', na_logical_interface)
-         | list | first
-         | default(
-             (_ports_resp.json.data | default([]))
-             | selectattr('port', 'equalto', na_logical_interface)
-             | list | first | default(none)
-           ) }}
+      {{ _server_ports
+         | selectattr('port', 'equalto', na_logical_interface)
+         | list | first | default(none) }}
   when:
     - _target_vnet is defined and _target_vnet is not none
     - _target_server is defined and _target_server is not none
