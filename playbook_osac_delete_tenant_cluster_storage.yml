@@ -67,6 +67,16 @@
         # serving cert doesn't match the CA bundled in the admin kubeconfig.
         _remote_kubeconfig_insecure: true
 
+    - name: Fail when guest-cluster teardown is requested without admin_kubeconfig
+      ansible.builtin.fail:
+        msg: >-
+          admin_kubeconfig is required in the EDA event for ClusterOrder
+          (guest-cluster) storage teardown; without it cleanup would target
+          the controller's default cluster instead of the guest cluster.
+      when: >-
+        ansible_eda.event.payload.kind == 'ClusterOrder' and
+        (_remote_kubeconfig is not defined or _remote_kubeconfig | length == 0)
+
   tasks:
     - name: Skip cleanup when STORAGE_TIERS is not configured
       when: _storage_tiers_raw | length == 0
