@@ -20,13 +20,6 @@
       _provider_tiers must be provided by the service role dispatcher.
       This role should not be called directly — use osac.service.storage_provider.
 
-- name: Fail if provisioning target is not yet supported
-  when: _provisioning_target != 'vmaas'
-  ansible.builtin.fail:
-    msg: >-
-      VAST storage provisioning for target '{{ _provisioning_target }}' is not yet
-      implemented. Only 'vmaas' is currently supported.
-
 - name: Validate tenant_name is a valid DNS label
   ansible.builtin.fail:
     msg: >-
