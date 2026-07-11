@@ -72,7 +72,7 @@ spec:
               -H "Content-Type: application/json" \
               -d '{"description": "osac-operator", "scope": "write"}' \
               "http://{{ include "osac-aap.gatewayHostname" . }}/api/gateway/v1/tokens/" \
-              | jq -er '.token')
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
             [[ -n "${TOKEN}" ]] || { echo "ERROR: Token was empty"; exit 1; }
             echo "Storing token in secret osac-aap-api-token..."
             cat <<YAML | oc apply -f -
