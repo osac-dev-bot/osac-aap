@@ -1,0 +1,142 @@
+{{- if .Values.instanceGroups.publishTemplates.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "osac-aap.fullname" . }}-publish-templates
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac-aap.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "20"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        {{- include "osac-aap.labels" . | nindent 8 }}
+    spec:
+      initContainers:
+      - name: wait-for-fulfillment
+        image: {{ .Values.bootstrap.cliImage }}
+        command:
+          - /bin/bash
+          - -euo
+          - pipefail
+          - -c
+          - |
+            echo "Waiting for fulfillment internal API..."
+            for i in $(seq 1 60); do
+              echo "Attempt ${i}: checking https://fulfillment-internal-api:8001/healthz"
+              if curl -skf https://fulfillment-internal-api:8001/healthz; then
+                echo ""
+                echo "Fulfillment service is ready."
+                exit 0
+              fi
+              sleep 10
+            done
+            echo "ERROR: Fulfillment service not ready after 600s"
+            exit 1
+        env:
+        - name: HOME
+          value: /tmp
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+      containers:
+      - name: publish-templates
+        image: {{ .Values.bootstrap.cliImage }}
+        command:
+          - /bin/bash
+          - -euo
+          - pipefail
+          - -c
+          - |
+            AAP_TOKEN=$(oc get secret osac-aap-api-token -n {{ .Release.Namespace }} \
+              -o jsonpath='{.data.token}' | base64 -d)
+            [[ -n "${AAP_TOKEN}" ]] || { echo "ERROR: osac-aap-api-token secret is empty"; exit 1; }
+
+            AAP_URL="http://{{ include "osac-aap.gatewayHostname" . }}"
+
+            echo "Looking up osac-publish-templates job template..."
+            JT_RESPONSE=$(curl -sf -H "Authorization: Bearer ${AAP_TOKEN}" \
+              "${AAP_URL}/api/controller/v2/job_templates/?name=osac-publish-templates")
+            JT_ID=$(echo "${JT_RESPONSE}" | python3 -c "
+            import sys, json
+            data = json.load(sys.stdin)
+            if data['count'] == 0:
+                print('ERROR: osac-publish-templates not found in AAP', file=sys.stderr)
+                sys.exit(1)
+            print(data['results'][0]['id'])
+            ")
+            echo "Job template ID: ${JT_ID}"
+
+            echo "Launching osac-publish-templates..."
+            LAUNCH_RESPONSE=$(curl -sf -X POST \
+              -H "Authorization: Bearer ${AAP_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "${AAP_URL}/api/controller/v2/job_templates/${JT_ID}/launch/")
+            JOB_ID=$(echo "${LAUNCH_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+            [[ -n "${JOB_ID}" ]] || { echo "ERROR: Failed to launch publish-templates job"; exit 1; }
+            echo "Job ${JOB_ID} launched, polling for completion..."
+
+            for i in $(seq 1 60); do
+              STATUS=$(curl -sf -H "Authorization: Bearer ${AAP_TOKEN}" \
+                "${AAP_URL}/api/controller/v2/jobs/${JOB_ID}/" \
+                | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
+              echo "  Poll ${i}: status=${STATUS}"
+              case "${STATUS}" in
+                successful)
+                  echo "Templates published successfully."
+                  exit 0
+                  ;;
+                failed|error|canceled)
+                  echo "ERROR: Publish job ${JOB_ID} finished with status: ${STATUS}"
+                  echo "--- Job stdout ---"
+                  curl -sf -H "Authorization: Bearer ${AAP_TOKEN}" \
+                    "${AAP_URL}/api/controller/v2/jobs/${JOB_ID}/stdout/?format=txt" | tail -30
+                  exit 1
+                  ;;
+              esac
+              sleep 10
+            done
+            echo "ERROR: Timed out waiting for publish job ${JOB_ID} after 600s"
+            exit 1
+        env:
+        - name: HOME
+          value: /tmp
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      serviceAccountName: {{ .Values.serviceAccounts.osacSa }}
+      restartPolicy: Never
+{{- end }}
