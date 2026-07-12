@@ -1,6 +1,7 @@
 ---
 - name: Ensure openshift-operators namespace exists
   kubernetes.core.k8s:
+    kubeconfig: "{{ admin_kubeconfig | default(omit) }}"
     state: present
     definition:
       apiVersion: v1
@@ -10,6 +11,7 @@
 
 - name: Create cert-manager subscription
   kubernetes.core.k8s:
+    kubeconfig: "{{ admin_kubeconfig | default(omit) }}"
     state: present
     definition:
       apiVersion: operators.coreos.com/v1alpha1
@@ -26,6 +28,7 @@
 
 - name: Create production issuer
   kubernetes.core.k8s:
+    kubeconfig: "{{ admin_kubeconfig | default(omit) }}"
     state: present
     definition:
       apiVersion: cert-manager.io/v1
@@ -48,6 +51,7 @@
 
 - name: Create staging issuer
   kubernetes.core.k8s:
+    kubeconfig: "{{ admin_kubeconfig | default(omit) }}"
     state: present
     definition:
       apiVersion: cert-manager.io/v1
