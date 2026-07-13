@@ -12,6 +12,7 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   backoffLimit: 5
+  activeDeadlineSeconds: 3600
   template:
     metadata:
       labels:
@@ -53,10 +54,27 @@ spec:
             echo "Timeout waiting for AAP."
             exit 1
         env:
+        - name: HOME
+          value: /tmp
         - name: AAP_GATEWAY_HOSTNAME
           value: {{ include "osac-aap.gatewayHostname" . | quote }}
         - name: AAP_CONTROLLER_GATEWAY_HOSTNAME
           value: {{ include "osac-aap.controllerHostname" . | quote }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
       containers:
       - name: create-token
         image: {{ .Values.bootstrap.cliImage }}
@@ -90,14 +108,33 @@ spec:
             oc rollout restart deploy/osac-operator -n {{ .Release.Namespace }}
             oc rollout status deploy/osac-operator -n {{ .Release.Namespace }} --timeout=120s
             echo "Operator restarted."
+        env:
+        - name: HOME
+          value: /tmp
         volumeMounts:
         - name: aap-admin-password
           mountPath: /var/run/secrets/aap-admin
           readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
       volumes:
       - name: aap-admin-password
         secret:
           secretName: {{ include "osac-aap.instanceName" . }}-admin-password
+      - name: tmp
+        emptyDir: {}
       serviceAccountName: {{ .Values.serviceAccounts.osacSa }}
       restartPolicy: Never
 {{- end }}
