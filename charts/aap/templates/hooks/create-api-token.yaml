@@ -29,17 +29,17 @@ spec:
             echo "Waiting for AAP controller to be ready..."
             for i in {1..60}; do
               echo "Attempt $i: Checking AAP controller readiness..."
-              curl -skf --connect-timeout 5 --max-time 15 \
+              curl -sf --connect-timeout 5 --max-time 15 \
                 http://${AAP_GATEWAY_HOSTNAME}/api/gateway/v1/ping/ \
                 | grep -q 'good';
               GATEWAY=$?
 
-              curl -skf --connect-timeout 5 --max-time 15 \
+              curl -sf --connect-timeout 5 --max-time 15 \
                 http://${AAP_CONTROLLER_GATEWAY_HOSTNAME}/api/v2/ping/ \
                 | grep -q 'version';
               CONTROLLER_GATEWAY=$?
 
-              auth_code=$(curl -sk --connect-timeout 5 --max-time 15 \
+              auth_code=$(curl -s --connect-timeout 5 --max-time 15 \
                 -o /dev/null -w "%{http_code}" -X POST \
                 http://${AAP_GATEWAY_HOSTNAME}/api/gateway/v1/tokens/ \
                 -d "username=admin&password=dummy")
@@ -89,7 +89,7 @@ spec:
             set -euo pipefail
             AAP_PASSWORD=$(cat /var/run/secrets/aap-admin/password)
             echo "Creating AAP API token..."
-            TOKEN=$(curl -sk --connect-timeout 5 --max-time 30 -X POST \
+            TOKEN=$(curl -s --connect-timeout 5 --max-time 30 -X POST \
               -u "admin:${AAP_PASSWORD}" \
               -H "Content-Type: application/json" \
               -d '{"description": "osac-operator", "scope": "write"}' \
