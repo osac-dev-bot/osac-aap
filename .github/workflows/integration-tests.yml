@@ -8,6 +8,11 @@ concurrency:
 on:  # yamllint disable-line rule:truthy
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'OWNERS'
+      - 'LICENSE'
+      - '*.md'
+      - 'docs/**'
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * *'

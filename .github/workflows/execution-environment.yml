@@ -14,6 +14,11 @@ on:
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - 'OWNERS'
+      - 'LICENSE'
+      - '*.md'
+      - 'docs/**'
 
 jobs:
   build-execution-environment:
