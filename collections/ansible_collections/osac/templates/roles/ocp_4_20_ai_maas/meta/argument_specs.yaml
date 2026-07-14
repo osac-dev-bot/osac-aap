@@ -58,6 +58,63 @@ argument_specs:
         required: false
         default: true
         description: Run verification tests after deployment.
+      ocp_4_20_ai_maas_hardware_profiles:
+        type: list
+        required: false
+        default: []
+        description: >
+          List of HardwareProfile CRs to create on the cluster. Each entry
+          defines a GPU/accelerator profile with CPU, memory, and optional
+          accelerator resource constraints. A single cluster can have N
+          profiles — users select the appropriate one in the RHOAI dashboard
+          when deploying models. Empty list (default) creates no profiles.
+          See analysis/phase3/hw_profiles.md for ready-to-use definitions.
+        elements: dict
+      ocp_4_20_ai_maas_external_models:
+        type: list
+        required: false
+        default: []
+        description: >
+          List of external models to access from upstream clusters. Each entry
+          creates an ExternalModel CR with MaaS governance (AuthPolicy +
+          Subscription) on the tenant cluster. Requires enable_maas=true.
+          Empty list (default) skips external model setup.
+
+          Each entry is a dict with required fields:
+            name            - Local model name (CR names derived from this)
+            secured         - true = deploy proxy (Path B/C), false = direct Route (Path A)
+            upstream_endpoint - Gateway FQDN (secured) or Route FQDN (unsecured)
+            upstream_credential - MaaS API key (B), K8s SA token (C), or 'dummy-not-used' (A)
+            upstream_model_ns - Model namespace on upstream cluster
+            upstream_model_name - Model name on upstream cluster
+            model_id        - spec.targetModel for ExternalModel (e.g. granite-3.1-8b-instruct-fp8)
+            token_limit     - Tenant-side rate limit (tokens per window)
+            window          - Rate limit window (e.g. 1m, 1h)
+            priority        - MaaSSubscription priority (lower number = lower tier)
+
+          When secured=true, a maas-proxy Deployment is created targeting
+          upstream_endpoint. The proxy adds /<upstream_model_ns>/<upstream_model_name>/
+          path prefix. Multiple models from the same upstream share one proxy.
+          When secured=false, ExternalModel points directly to upstream_endpoint
+          (a manually created OpenShift Route FQDN).
+        elements: dict
+      ocp_4_20_ai_maas_proxy_image:
+        type: str
+        required: false
+        default: "quay.io/mpaulgreen/maas-proxy:latest"
+        description: Container image for maas-proxy Deployments (secured external models).
+      ocp_4_20_ai_maas_proxy_namespace:
+        type: str
+        required: false
+        default: "maas-proxies"
+        description: Namespace for maas-proxy Deployments and routing Services.
+      ocp_4_20_ai_maas_external_model_namespace:
+        type: str
+        required: false
+        default: "external-models"
+        description: >
+          Namespace for ExternalModel CRs and credential Secrets. Created with
+          required labels (opendatahub.io/generated-namespace, gateway-access).
       ocp_4_20_ai_maas_ocp_release_image:
         type: str
         required: false

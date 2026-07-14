@@ -41,6 +41,69 @@
       - ocp_4_20_ai_maas_coo_starting_csv is regex('^[\w.\-]+$')
     fail_msg: "Shell-interpolated variables contain invalid characters"
 
+- name: Validate external models require MaaS
+  ansible.builtin.assert:
+    that:
+      - ocp_4_20_ai_maas_enable_maas | bool
+    fail_msg: >-
+      external_models is configured but enable_maas=false. ExternalModel CRs
+      route through maas-default-gateway which only exists when MaaS is enabled.
+  when: ocp_4_20_ai_maas_external_models | length > 0
+
+- name: Validate external model entries have required fields
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.secured is defined
+      - item.upstream_endpoint is defined
+      - item.upstream_credential is defined
+      - item.upstream_model_ns is defined
+      - item.upstream_model_name is defined
+      - item.model_id is defined
+      - item.token_limit is defined
+      - item.window is defined
+      - item.priority is defined
+    fail_msg: >-
+      External model '{{ item.name | default("unnamed") }}' is missing required fields.
+      Required: name, secured, upstream_endpoint, upstream_credential, upstream_model_ns,
+      upstream_model_name, model_id, token_limit, window, priority.
+  loop: "{{ ocp_4_20_ai_maas_external_models }}"
+  loop_control:
+    label: "{{ item.name | default('unnamed') }}"
+  no_log: true
+  when: ocp_4_20_ai_maas_external_models | length > 0
+
+- name: Validate external model credentials are not empty
+  ansible.builtin.assert:
+    that:
+      - item.upstream_credential | length > 0
+    fail_msg: >-
+      External model '{{ item.name }}' has empty upstream_credential.
+      MaaS rejects empty api-key. Use a valid credential or 'dummy-not-used' for unsecured.
+  loop: "{{ ocp_4_20_ai_maas_external_models }}"
+  loop_control:
+    label: "{{ item.name | default('unnamed') }}"
+  no_log: true
+  when: ocp_4_20_ai_maas_external_models | length > 0
+
+- name: Validate hardware profile entries have required fields
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.cpu_default is defined
+      - item.cpu_min is defined
+      - item.cpu_max is defined
+      - item.memory_default is defined
+      - item.memory_min is defined
+      - item.memory_max is defined
+    fail_msg: >-
+      Hardware profile '{{ item.name | default("unnamed") }}' is missing required fields.
+      Required: name, cpu_default, cpu_min, cpu_max, memory_default, memory_min, memory_max.
+  loop: "{{ ocp_4_20_ai_maas_hardware_profiles }}"
+  loop_control:
+    label: "{{ item.name | default('unnamed') }}"
+  when: ocp_4_20_ai_maas_hardware_profiles | length > 0
+
 # --- Step 1: cert-manager ---
 # RHCL 1.3 requires cert-manager 1.18 per https://access.redhat.com/articles/7092611
 # Parent template may already install cert-manager; skip if found.
