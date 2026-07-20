@@ -176,7 +176,7 @@ class TemplateParameter(Base):
                 return ProtobufAnyValue(type=TypeMapping[type(value)], value=value)
             except KeyError as err:
                 raise ValueError(
-                    f"Default values must be scalar type, not {err}")
+                    f"Unsupported default value type: {err}")
 
 
 class NodeRequest(Base):
