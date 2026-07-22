@@ -176,7 +176,8 @@ class TemplateParameter(Base):
                 return ProtobufAnyValue(type=TypeMapping[type(value)], value=value)
             except KeyError as err:
                 raise ValueError(
-                    f"Unsupported default value type: {err}")
+                    f"Unsupported default value type: {err}") from None
+        return None
 
 
 class NodeRequest(Base):
