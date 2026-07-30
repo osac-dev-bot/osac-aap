@@ -5,6 +5,7 @@ import pytest
 import yaml
 
 from find_template_roles import (
+    BareMetalInstanceTemplate,
     Metadata,
     ProtobufAnyValue,
     ProtobufType,
@@ -314,3 +315,42 @@ class TestRegressions:
         param = TemplateParameter.from_definition(defn)
         assert param.default is not None
         assert param.default.value == {"key": "val"}
+
+    def test_bare_metal_parameters_serialized_osac_3066(self):
+        """OSAC-3066: BareMetalInstanceTemplate.parameters were excluded from serialization."""
+        params = [
+            TemplateParameter(
+                name="imageChecksum",
+                title="Image Checksum",
+                description="Checksum of the OS image",
+                default="abc123",
+            ),
+            TemplateParameter(
+                name="checksumType",
+                title="Checksum Type",
+                description="Algorithm used for the image checksum",
+                default="sha256",
+            ),
+        ]
+        template = BareMetalInstanceTemplate(
+            collection="osac.templates",
+            path=Path("/fake/path"),
+            name="bm_host_provisioning",
+            title="Test BM Template",
+            description="Test",
+            parameters=params,
+        )
+        dumped = template.model_dump(by_alias=True, exclude_none=True)
+        assert "parameters" in dumped
+        assert len(dumped["parameters"]) == 2
+        param_names = [p["name"] for p in dumped["parameters"]]
+        assert "imageChecksum" in param_names
+        assert "checksumType" in param_names
+
+    def test_bm_host_provisioning_declares_checksum_params_osac_3066(self, roles_dir):
+        """OSAC-3066: bm_host_provisioning must declare imageChecksum and checksumType."""
+        metadata = _load_metadata(roles_dir, "bm_host_provisioning")
+        assert metadata.template_type == TemplateTypeEnum.bare_metal_instance
+        param_names = [p.name for p in metadata.parameters]
+        assert "imageChecksum" in param_names, "imageChecksum parameter not declared"
+        assert "checksumType" in param_names, "checksumType parameter not declared"

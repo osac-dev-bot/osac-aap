@@ -3,3 +3,21 @@ title: Bare Metal Host Image Provisioning
 description: >
   Provisions bare metal instances using an image. Template name: bm_host_provisioning.
 template_type: bare_metal_instance
+parameters:
+  - name: imageChecksum
+    title: Image Checksum
+    description: >
+      Checksum of the OS image for verification during provisioning.
+      Required for HTTP URL images (non-OCI). Must match the checksumType algorithm.
+    type: string
+    required: false
+    default: "28680fe5b371a5a82ebf43a31926e086a168e59949d03969c5093e7071f90b7f"
+  - name: checksumType
+    title: Checksum Type
+    description: >
+      Algorithm used for the image checksum (e.g., sha256, sha512, md5).
+    type: string
+    required: false
+    default: "sha256"
+    validation:
+      pattern: '^(md5|sha256|sha512)$'

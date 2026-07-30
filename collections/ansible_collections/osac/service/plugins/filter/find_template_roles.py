@@ -358,8 +358,6 @@ class BareMetalInstanceTemplate(BaseTemplate):
     template_type: Literal[TemplateTypeEnum.bare_metal_instance] = pydantic.Field(
         default=TemplateTypeEnum.bare_metal_instance, exclude=True
     )
-    # BareMetalInstanceTemplate API does not support parameters field
-    parameters: list[TemplateParameter] = pydantic.Field(default_factory=list, exclude=True)
 
 
 class NetworkClassTemplate(Base):
